@@ -45,12 +45,8 @@ def room_avaliable(room_id: int, start_date: str, end_date: str):
     return not len(list_cursor) > 0
 
 
-def validate_input(room_id: int, start_date: str, end_date: str):
-    pass
-
-
 @app.get("/reservation/by-name/{name}")
-def get_reservation_by_name(name:str):
+def get_reservation_by_name(name: str):
     reservations = []
     for i in collection.find({'name': name}, {'_id': False}):
         reservations.append(i)
@@ -73,7 +69,7 @@ def validate_date(start_date, end_date):
         raise HTTPException(status_code=422, detail="Date out of range")
     if end_date < start_date:
         raise HTTPException(status_code=400, detail="The start date must come before the end date.")
-    return start_date, end_date
+    return str(start_date.date()), str(end_date.date())
 
 
 @app.post("/reservation")
@@ -83,11 +79,11 @@ def reserve(reservation: Reservation):
     if room_id not in range(1, 11):
         raise HTTPException(status_code=400, detail="We only have room id 1-10.")
     if room_avaliable(room_id=room_id,
-                      start_date=str(start_date.date()),
-                      end_date=str(end_date.date())):
+                      start_date=start_date,
+                      end_date=end_date):
         collection.insert_one({"name": reservation.name,
-                               "start_date": str(start_date.date()),
-                               "end_date": str(end_date.date()),
+                               "start_date": start_date,
+                               "end_date": end_date,
                                "room_id": reservation.room_id})
     else:
         raise HTTPException(status_code=400, detail="Sorry, Room not available.")
@@ -97,10 +93,11 @@ def reserve(reservation: Reservation):
 def update_reservation(reservation: Reservation, new_start_date: str = Body(), new_end_date: str = Body()):
     reservation = collection.find_one(dict(reservation), {"_id": False})
     new_start, new_end = validate_date(new_start_date, new_end_date)
-    if reservation and room_avaliable(room_id=reservation["room_id"], start_date=str(new_start.date()),
-                                      end_date=str(new_end.date())):
-        collection.update_one(reservation, {'$set': {"start_date": str(new_start.date()),
-                                                     "end_date": str(new_end.date())}})
+    if reservation and room_avaliable(room_id=reservation["room_id"],
+                                      start_date=new_start,
+                                      end_date=new_end):
+        collection.update_one(reservation, {'$set': {"start_date": new_start,
+                                                     "end_date": new_end}})
         return "Reservation updated"
     else:
         raise HTTPException(status_code=400, detail="Reservation not available.")

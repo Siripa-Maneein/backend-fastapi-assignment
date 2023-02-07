@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, Body
-from datetime import datetime
+from datetime import datetime, date
 from pymongo import MongoClient
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -17,8 +17,8 @@ MONGO_DB_PORT = 8443
 
 class Reservation(BaseModel):
     name: str
-    start_date: str
-    end_date: str
+    start_date: date
+    end_date: date
     room_id: int
 
 
@@ -61,12 +61,9 @@ def get_reservation_by_room(room_id: int):
     return {"result": reservations}
 
 
-def validate_date(start_date, end_date):
-    try:
-        start_date = datetime.strptime(start_date, "%Y-%m-%d")
-        end_date = datetime.strptime(end_date, "%Y-%m-%d")
-    except ValueError:
-        raise HTTPException(status_code=422, detail="Date out of range")
+def validate_date(start_date: str, end_date: str):
+    start_date = datetime.strptime(start_date, "%Y-%m-%d")
+    end_date = datetime.strptime(end_date, "%Y-%m-%d")
     if end_date < start_date:
         raise HTTPException(status_code=400, detail="The start date must come before the end date.")
     return str(start_date.date()), str(end_date.date())
@@ -74,7 +71,7 @@ def validate_date(start_date, end_date):
 
 @app.post("/reservation")
 def reserve(reservation: Reservation):
-    start_date, end_date = validate_date(reservation.start_date, reservation.end_date)
+    start_date, end_date = validate_date(str(reservation.start_date), str(reservation.end_date))
     room_id = reservation.room_id
     if room_id not in range(1, 11):
         raise HTTPException(status_code=400, detail="We only have room id 1-10.")
@@ -90,9 +87,15 @@ def reserve(reservation: Reservation):
 
 
 @app.put("/reservation/update")
-def update_reservation(reservation: Reservation, new_start_date: str = Body(), new_end_date: str = Body()):
-    reservation = collection.find_one(dict(reservation), {"_id": False})
-    new_start, new_end = validate_date(new_start_date, new_end_date)
+def update_reservation(reservation: Reservation, new_start_date: date = Body(), new_end_date: date = Body()):
+    res = {
+        "name": reservation.name,
+        "start_date": str(reservation.start_date),
+        "end_date": str(reservation.end_date),
+        "room_id": reservation.room_id
+    }
+    reservation = collection.find_one(res, {"_id": False})
+    new_start, new_end = validate_date(str(new_start_date), str(new_end_date))
     if reservation and room_avaliable(room_id=reservation["room_id"],
                                       start_date=new_start,
                                       end_date=new_end):
@@ -105,8 +108,14 @@ def update_reservation(reservation: Reservation, new_start_date: str = Body(), n
 
 @app.delete("/reservation/delete")
 def cancel_reservation(reservation: Reservation):
-    reservation = collection.find_one(dict(reservation), {"_id": False})
+    res = {
+        "name": reservation.name,
+        "start_date": str(reservation.start_date),
+        "end_date": str(reservation.end_date),
+        "room_id": reservation.room_id
+    }
+    reservation = collection.find_one(res, {"_id": False})
     if reservation:
-        collection.delete_one(dict(reservation))
+        collection.delete_one(res)
     else:
         return HTTPException(status_code=400, detail="Reservation not found.")
